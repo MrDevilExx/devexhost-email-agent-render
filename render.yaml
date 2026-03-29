@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: devexhost-email-agent
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node src/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: "llama3-70b-8192"
+      - key: MONGODB_URI
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: DevExHost Team
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DAILY_SEND_LIMIT
+        value: "100"
+      - key: MAX_EMAILS_PER_HUNT
+        value: "200"
+      - key: MIN_DAYS_BETWEEN_EMAILS
+        value: "5"
+      - key: MAX_FOLLOWUPS
+        value: "2"

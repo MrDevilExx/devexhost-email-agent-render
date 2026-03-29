@@ -1,0 +1,125 @@
+name: 🤖 DevExHost Daily Email Automation
+
+on:
+  # ── প্রতিদিন রাত ৩টায় UTC = সকাল ৯টা Bangladesh ──
+  schedule:
+    - cron: '0 3 * * *'
+
+  # ── Manual trigger (GitHub UI থেকে run করা যাবে) ──
+  workflow_dispatch:
+    inputs:
+      step:
+        description: 'Which step to run?'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - hunt
+          - validate
+          - send
+      campaign:
+        description: 'Campaign type'
+        required: false
+        default: 'free_domain'
+        type: choice
+        options:
+          - free_domain
+          - free_hosting
+          - vps_speed
+          - reseller
+          - discount
+
+jobs:
+  daily-automation:
+    name: 📧 Email Marketing Agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # ── ১. Code checkout ───────────────────────────────────────
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      # ── ২. Node.js setup ────────────────────────────────────────
+      - name: ⚙️ Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── ৩. Dependencies install ─────────────────────────────────
+      - name: 📦 Install Dependencies
+        run: npm install --omit=dev
+
+      # ── ৪. Environment variables setup ─────────────────────────
+      - name: 🔑 Setup Environment
+        run: |
+          cat > .env << EOF
+          GROK_API_KEY=${{ secrets.GROK_API_KEY }}
+          GROK_API_URL=https://api.x.ai/v1/chat/completions
+          GROK_MODEL=grok-3-latest
+          MONGODB_URI=${{ secrets.MONGODB_URI }}
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_SECURE=false
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASS=${{ secrets.SMTP_PASS }}
+          SMTP_FROM_NAME=DevExHost Team
+          SMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}
+          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          BASE_URL=https://devexhost.com
+          DAILY_SEND_LIMIT=100
+          MAX_EMAILS_PER_HUNT=200
+          MIN_DAYS_BETWEEN_EMAILS=5
+          MAX_FOLLOWUPS=2
+          NODE_ENV=production
+          EOF
+
+      # ── ৫. Seed campaigns ────────────────────────────────────────
+      - name: 🌱 Seed Campaigns
+        run: node -e "
+          require('dotenv').config();
+          const connectDB = require('./src/config/db');
+          const { seedCampaigns } = require('./src/services/campaignManager');
+          connectDB().then(seedCampaigns).then(() => process.exit(0));
+        "
+
+      # ── ৬. Step: Hunt emails ────────────────────────────────────
+      - name: 🔍 Hunt New Emails
+        if: github.event.inputs.step == 'hunt' || github.event.inputs.step == 'all' || github.event_name == 'schedule'
+        run: node src/services/emailHunter.js
+        env:
+          FORCE_COLOR: '1'
+
+      # ── ৭. Step: Validate emails ────────────────────────────────
+      - name: 🔬 Validate Emails
+        if: github.event.inputs.step == 'validate' || github.event.inputs.step == 'all' || github.event_name == 'schedule'
+        run: node src/services/emailValidator.js
+        env:
+          FORCE_COLOR: '1'
+
+      # ── ৮. Step: Send campaign ──────────────────────────────────
+      - name: 📤 Send Campaign Emails
+        if: github.event.inputs.step == 'send' || github.event.inputs.step == 'all' || github.event_name == 'schedule'
+        run: node src/services/emailSender.js ${{ github.event.inputs.campaign || 'free_domain' }}
+        env:
+          FORCE_COLOR: '1'
+
+      # ── ৯. Run full automation (schedule trigger) ────────────────
+      - name: 🤖 Full Daily Automation
+        if: github.event_name == 'schedule'
+        run: node src/automation.js
+        env:
+          FORCE_COLOR: '1'
+
+      # ── ১০. Upload logs as artifact ──────────────────────────────
+      - name: 📊 Upload Run Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-agent-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7

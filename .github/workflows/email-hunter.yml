@@ -1,0 +1,41 @@
+name: 🔍 Email Hunter (Twice Weekly)
+
+on:
+  schedule:
+    # ── প্রতি সোম ও বৃহস্পতিবার সকাল ৮টা BST ──
+    - cron: '0 2 * * 1,4'
+  workflow_dispatch:
+
+jobs:
+  hunt:
+    name: 🎯 Hunt BD Business Emails
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm install --omit=dev
+
+      - name: 🔑 Setup .env
+        run: |
+          cat > .env << EOF
+          GROK_API_KEY=${{ secrets.GROK_API_KEY }}
+          MONGODB_URI=${{ secrets.MONGODB_URI }}
+          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          MAX_EMAILS_PER_HUNT=200
+          NODE_ENV=production
+          EOF
+
+      - name: 🔍 Hunt Emails
+        run: node src/services/emailHunter.js
+
+      - name: 🔬 Validate Collected
+        run: node src/services/emailValidator.js
